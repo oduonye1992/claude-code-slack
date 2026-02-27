@@ -2,8 +2,8 @@ name: Deploy Scout
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
 
 jobs:
   deploy:
@@ -27,8 +27,9 @@ jobs:
 
             cd ${{ secrets.APP_DIR || '/opt/scout' }}
 
-            echo "── Pulling latest code ───────────────────────────────"
-            git pull origin main
+            echo "── Checking out tag ──────────────────────────────────"
+            git fetch --tags
+            git checkout "${{ github.ref_name }}"
 
             echo "── Backing up database ──────────────────────────────"
             if [ -f data/bot.db ]; then
@@ -39,13 +40,13 @@ jobs:
             fi
 
             echo "── Building and restarting Scout ────────────────────"
-            docker-compose up -d --build
+            docker compose up -d --build
 
             echo "── Waiting for container to start ───────────────────"
             sleep 8
 
             echo "── Health check ─────────────────────────────────────"
-            docker-compose exec -T scout python3 scripts/health_check.py --quick
+            docker compose exec -T scout python3 scripts/health_check.py --quick
 
             echo "── Deploy complete ──────────────────────────────────"
 

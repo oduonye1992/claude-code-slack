@@ -4,6 +4,8 @@ services:
   scout:
     build: .
     env_file: .env
+    environment:
+      - APPROVED_DIRECTORY=/app
     volumes:
       - ./data:/app/data
       - ./config:/app/config

@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     gnupg \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Node.js 20 ──────────────────────────────────────────────────────────────
@@ -35,9 +36,18 @@ RUN poetry install --only main --no-interaction --no-ansi
 
 COPY . .
 
+# ── Non-root user (claude CLI refuses --dangerously-skip-permissions as root) ─
+RUN useradd -m -u 1000 scout \
+    && chown -R scout:scout /app
+
+# Entrypoint runs as root, fixes volume ownership, then drops to scout
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # ── Runtime ─────────────────────────────────────────────────────────────────
 VOLUME ["/app/data"]
 
 EXPOSE 8080
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["sh", "-c", "python3 scripts/db_migrate.py --db-path data/bot.db && python -m src.main"]
