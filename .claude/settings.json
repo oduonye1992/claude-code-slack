@@ -1,0 +1,52 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "black --quiet --check \"$CLAUDE_FILE_PATHS\" 2>/dev/null || black --quiet \"$CLAUDE_FILE_PATHS\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/health_check.py --quick >> data/health_log.jsonl 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Bash(python3 scripts/*)",
+      "Bash(make *)",
+      "Bash(git *)",
+      "Bash(pytest *)",
+      "Bash(black *)",
+      "Bash(isort *)",
+      "Bash(cat *)",
+      "Bash(echo *)",
+      "Bash(pip install *)",
+      "Bash(docker-compose *)",
+      "Bash(curl *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/secrets/**)",
+      "Write(.env)",
+      "Write(.env.*)",
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(> /dev/sda*)"
+    ]
+  }
+}

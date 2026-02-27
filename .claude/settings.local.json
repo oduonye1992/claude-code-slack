@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(poetry run:*)",
+      "Bash(make run:*)",
+      "Bash(make:*)",
+      "Bash(poetry install:*)",
+      "Bash(lsof:*)",
+      "Bash(ps:*)",
+      "Bash(kill 6838:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker compose logs --tail=200 scout 2>&1 | grep -v \"db_path\\\\|skipped\\\\|applied\\\\|status\\\\|timestamp\\\\|migrate\" | head=80)"
+    ]
+  }
+}

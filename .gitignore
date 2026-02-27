@@ -149,8 +149,8 @@ backups/
 uploads/
 
 # Claude Code / agent state
-.claude/
-.agents/
+# .claude/
+#.agents/
 
 # Local MCP & project config (contain secrets/personal paths)
 config/mcp.json
