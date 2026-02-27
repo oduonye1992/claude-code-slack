@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format clean help run run-remote remote-attach remote-stop
+.PHONY: install dev test lint format clean help run run-debug run-remote remote-attach remote-stop db-init setup
 
 # Default target
 help:
@@ -9,7 +9,9 @@ help:
 	@echo "  lint       - Run linting checks"
 	@echo "  format     - Format code"
 	@echo "  clean      - Clean up generated files"
-	@echo "  run        - Run the bot"
+	@echo "  db-init    - Create data/ dir and run DB migrations"
+	@echo "  setup      - Full first-time setup (deps + DB)"
+	@echo "  run        - Run the bot (creates data/ if missing)"
 	@echo "  run-remote - Start bot in tmux on remote Mac (unlocks keychain)"
 	@echo "  remote-attach - Attach to running bot tmux session"
 	@echo "  remote-stop   - Stop the bot tmux session"
@@ -40,11 +42,20 @@ clean:
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .coverage htmlcov/ .pytest_cache/ dist/ build/
 
-run:
+data/:
+	mkdir -p data
+
+db-init: data/
+	python3 scripts/db_migrate.py --db-path data/bot.db
+
+setup: dev db-init
+	@echo "Scout is ready. Copy .env.example to .env and fill in your tokens."
+
+run: data/
 	poetry run claude-slack-bot
 
 # For debugging
-run-debug:
+run-debug: data/
 	poetry run claude-slack-bot --debug
 
 # Remote Mac Mini (SSH session)

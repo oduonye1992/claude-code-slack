@@ -1,18 +1,110 @@
-# CLAUDE.md
+# Scout — AI Agent for Aurie UGC Content Pipeline
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Scout is a Slack-integrated AI agent that monitors mental health and wellness trends and generates
+UGC video prompts optimised for Google Veo 3.1. Scout runs on top of the `claude-code-slack`
+platform (do not modify `src/`, `tests/`, `pyproject.toml`, or `poetry.lock`).
 
-## Agent Info
+---
 
-- **Model**: `opus[1m]` (Claude Opus, 1M context window) — set in `~/.claude/settings.json`
-- **Effort level**: `medium`
-- **Agent teams**: enabled (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`)
+## Identity
 
-## Project Overview
+Scout serves Aurie — an AI mental health companion that is voice-first, available 24/7, and
+designed to feel like a trusted friend, not a clinical tool. Every piece of content Scout produces
+must reflect that identity.
 
-Slack bot providing remote access to Claude Code. Python 3.11+, built with Poetry, using `slack-bolt` for Slack and `claude-agent-sdk` for Claude Code integration. Uses Socket Mode for WebSocket-based communication (no public URL needed).
+**Brand voice**: warm, empathetic, conversational. Never clinical, robotic, or dismissive.
 
-## Commands
+---
+
+## Trend → Veo 3.1 Prompt Pipeline
+
+1. **Fetch trends** — `python3 scripts/fetch_google_trends.py --region US --category health`
+2. **Score sentiment** — `python3 scripts/analyze_sentiment.py --text "<trend>"`
+3. **Store results** — `python3 scripts/db_migrate.py --db-path data/bot.db` (ensure schema), then
+   write trend rows to `data/bot.db`
+4. **Generate prompts** — `python3 scripts/generate_veo_prompt.py --trend-file data/latest_trend.json`
+5. **Compliance check** — always read `knowledge/clinical/compliance.md` before posting any
+   mental-health-adjacent content
+6. **Archive** — append approved prompts to `knowledge/content/veo3-prompts.md`
+7. **Post** — deliver formatted summary to Slack via the bot
+
+---
+
+## Available Scripts (`scripts/`)
+
+All scripts output JSON to stdout, errors to stderr, exit 0 on success.
+
+| Script | Purpose | Key flags |
+|---|---|---|
+| `fetch_google_trends.py` | Fetch trending topics (stub, TODO: pytrends) | `--region US --category health` |
+| `analyze_sentiment.py` | Sentiment label + score for a text string | `--text "..."` |
+| `generate_veo_prompt.py` | Build Veo 3.1 prompt components from a trend file | `--trend-file data/latest_trend.json` |
+| `db_migrate.py` | Run SQLite schema migrations | `--db-path data/bot.db` |
+| `health_check.py` | Full or quick system health report | `[--quick]` |
+| `billing_check.py` | Cost/limit summary (stub) | _(none)_ |
+
+See `scripts/README.md` for full usage.
+
+---
+
+## Knowledge Base (`knowledge/`)
+
+Always start from `knowledge/INDEX.md`. Key files:
+
+| File | When to read |
+|---|---|
+| `knowledge/INDEX.md` | At the start of every session |
+| `knowledge/brand/README.md` | Before writing any copy |
+| `knowledge/brand/do-and-dont.md` | Before finalising any prompt |
+| `knowledge/brand/visual-identity.md` | When describing visuals |
+| `knowledge/audience/personas.md` | When evaluating trend relevance |
+| `knowledge/audience/competitors.md` | For competitor context |
+| `knowledge/content/hooks.md` | When writing video openers |
+| `knowledge/content/hashtags.md` | When tagging content |
+| `knowledge/content/veo3-prompts.md` | Archive — append approved prompts here |
+| `knowledge/clinical/compliance.md` | **REQUIRED** before posting mental health content |
+| `knowledge/product/README.md` | When referencing Aurie features |
+
+---
+
+## Compliance Rule (Hard)
+
+> **Always read `knowledge/clinical/compliance.md` before generating or posting any content
+> related to mental health, anxiety, depression, crisis, or therapy.** Never skip this step.
+
+---
+
+## Slash Commands
+
+| Command | What it does |
+|---|---|
+| `/trend` | Full trend-to-prompt pipeline (researcher → store → content-writer → post) |
+| `/status` | System health check (DB, Slack, API keys, billing, uptime) |
+| `/start` | Start or resume a Claude Code session |
+| `/new` | Start a fresh session |
+| `/verbose [0\|1\|2]` | Set output verbosity for this session |
+
+---
+
+## Subagents
+
+- **`@researcher`** — Read-only deep-dive on trends and competitor analysis
+- **`@content-writer`** — Generates Veo 3.1 prompts; reads brand/content/clinical knowledge
+
+---
+
+## Docs
+
+- `docs/veo3_meta_prompt_guide.md` — Veo 3.1 prompt architecture, technical specs, UGC style guide
+
+---
+
+## Upstream Platform Notes
+
+This project is a fork of `claude-code-slack`. The upstream source lives in `src/`. Do not modify:
+- `src/`, `tests/`, `pyproject.toml`, `poetry.lock`, `Makefile`
+
+### Commands
 
 ```bash
 make dev              # Install all deps (including dev)
@@ -22,148 +114,19 @@ make run-debug        # Run with debug logging
 make test             # Run tests with coverage
 make lint             # Black + isort + flake8 + mypy
 make format           # Auto-format with black + isort
-
-# Run a single test
-poetry run pytest tests/unit/test_config.py -k test_name -v
-
-# Type checking only
-poetry run mypy src
 ```
 
-## Architecture
+### Git & Deploy Workflow
 
-### Claude SDK Integration
-
-`ClaudeIntegration` (facade in `src/claude/facade.py`) wraps `ClaudeSDKManager` (`src/claude/sdk_integration.py`), which uses `claude-agent-sdk` with `ClaudeSDKClient` for async streaming. Session IDs come from Claude's `ResultMessage`, not generated locally.
-
-Sessions auto-resume: per user+directory, persisted in SQLite.
-
-### Request Flow
-
-**Agentic mode** (default, `AGENTIC_MODE=true`):
-
-```
-Slack message -> Security middleware -> Auth middleware
--> Rate limit middleware -> MessageOrchestrator.agentic_text()
--> ClaudeIntegration.run_command() -> SDK
--> Response parsed -> Stored in SQLite -> Sent back to Slack
-```
-
-**External triggers** (webhooks, scheduler):
-
-```
-Webhook POST /webhooks/{provider} -> Signature verification -> Deduplication
--> Publish WebhookEvent to EventBus -> AgentHandler.handle_webhook()
--> ClaudeIntegration.run_command() -> Publish AgentResponseEvent
--> NotificationService -> Rate-limited Slack delivery
-```
-
-**Classic mode** (`AGENTIC_MODE=false`): Same middleware chain, but routes through full command/message handlers in `src/bot/handlers/` with 13 slash commands and Block Kit buttons.
-
-### Dependency Injection
-
-Bot handlers access dependencies via Bolt's `context` dict:
-```python
-context["deps"]["auth_manager"]
-context["deps"]["claude_integration"]
-context["deps"]["storage"]
-context["deps"]["security_validator"]
-```
-
-### Key Directories
-
-- `src/config/` -- Pydantic Settings v2 config with env detection, feature flags (`features.py`), YAML project loader (`loader.py`)
-- `src/bot/handlers/` -- Slack slash command, message event, and action handlers
-- `src/bot/middleware/` -- Auth, rate limit, security input validation (Bolt middleware pattern)
-- `src/bot/features/` -- Git integration, file handling, quick actions, session export
-- `src/bot/orchestrator.py` -- MessageOrchestrator: routes to agentic or classic handlers, project-channel routing
-- `src/claude/` -- Claude integration facade, SDK/CLI managers, session management, tool monitoring
-- `src/projects/` -- Multi-project support: `registry.py` (YAML project config), `thread_manager.py` (Slack channel sync/routing)
-- `src/storage/` -- SQLite via aiosqlite, repository pattern (users, sessions, messages, tool_usage, audit_log, cost_tracking, project_channels)
-- `src/security/` -- Multi-provider auth (whitelist + token), input validators, rate limiter, audit logging. User IDs are strings (Slack format: `U01ABC123`).
-- `src/events/` -- EventBus (async pub/sub), event types, AgentHandler, EventSecurityMiddleware
-- `src/api/` -- FastAPI webhook server, GitHub HMAC-SHA256 + Bearer token auth
-- `src/scheduler/` -- APScheduler cron jobs, persistent storage in SQLite
-- `src/notifications/` -- NotificationService, rate-limited Slack delivery via WebClient
-
-### Security Model
-
-5-layer defense: authentication (whitelist/token) -> directory isolation (APPROVED_DIRECTORY + path traversal prevention) -> input validation (blocks `..`, `;`, `&&`, `$()`, etc.) -> rate limiting (token bucket) -> audit logging.
-
-`SecurityValidator` blocks access to secrets (`.env`, `.ssh`, `id_rsa`, `.pem`) and dangerous shell patterns. Can be relaxed with `DISABLE_SECURITY_PATTERNS=true` (trusted environments only).
-
-`ToolMonitor` validates Claude's tool calls against allowlist/disallowlist, file path boundaries, and dangerous bash patterns. Tool name validation can be bypassed with `DISABLE_TOOL_VALIDATION=true`.
-
-Webhook authentication: GitHub HMAC-SHA256 signature verification, generic Bearer token for other providers, atomic deduplication via `webhook_events` table.
-
-### Configuration
-
-Settings loaded from environment variables via Pydantic Settings. Required: `SLACK_BOT_TOKEN` (xoxb-...), `SLACK_APP_TOKEN` (xapp-...), `APPROVED_DIRECTORY`. Key optional: `ALLOWED_USERS` (comma-separated Slack user IDs), `ANTHROPIC_API_KEY`, `ENABLE_MCP`, `MCP_CONFIG_PATH`.
-
-Agentic platform settings: `AGENTIC_MODE` (default true), `ENABLE_API_SERVER`, `API_SERVER_PORT` (default 8080), `GITHUB_WEBHOOK_SECRET`, `WEBHOOK_API_SECRET`, `ENABLE_SCHEDULER`, `NOTIFICATION_CHANNEL_IDS`.
-
-Security relaxation (trusted environments only): `DISABLE_SECURITY_PATTERNS` (default false), `DISABLE_TOOL_VALIDATION` (default false).
-
-Multi-project channels: `ENABLE_PROJECT_CHANNELS` (default false), `PROJECTS_CONFIG_PATH` (path to YAML project registry). Each project maps to a dedicated Slack channel (e.g., `#project-myapp`).
-
-Output verbosity: `VERBOSE_LEVEL` (default 1, range 0-2). Controls how much of Claude's background activity is shown to the user. 0 = quiet (only final response), 1 = normal (tool names + reasoning), 2 = detailed (tool inputs + longer reasoning). Users can override per-session via `/verbose 0|1|2`.
-
-Feature flags in `src/config/features.py` control: MCP, git integration, file uploads, quick actions, session export, image uploads, conversation mode, agentic mode, API server, scheduler.
+- Never push to `main` until the user confirms the change works in Slack.
+- Always run `make format`, `make lint`, `make test` before committing.
+- To restart the bot (sandbox-safe): `touch data/restart_requested`
 
 ### DateTime Convention
 
-All datetimes use timezone-aware UTC: `datetime.now(UTC)` (not `datetime.utcnow()`). SQLite adapters auto-convert TIMESTAMP/DATETIME columns to `datetime` objects via `detect_types=PARSE_DECLTYPES`. Model `from_row()` methods must guard `fromisoformat()` calls with `isinstance(val, str)` checks.
+Use `datetime.now(UTC)` — never `datetime.utcnow()`.
 
-## Task Tracking Convention
+### Code Style
 
-For non-trivial tasks, create a sub-directory under `.claude/tasks/` named after the task (e.g., `support_all_filetypes`). Each task directory contains:
-
-- `plan.md` — Implementation plan written before coding begins
-- `tasks.md` — Checklist tracking what's done and what remains
-
-Example: `.claude/tasks/support_all_filetypes/plan.md`
-
-## Git & Deploy Workflow
-
-- **Never push to `main` until the user has confirmed the change works.** Commit locally, restart the bot, and let the user verify in Slack first. Only push after explicit user approval. This applies to both bug fixes and new features.
-- **Always run `make format`, `make lint`, and `make test` before committing.** `make format` auto-fixes (Black + isort). `make lint` checks everything (Black, isort, flake8, mypy). `make test` runs the full pytest suite. All must pass with zero errors before pushing:
-  ```bash
-  poetry run black --check src tests
-  poetry run isort --check-only src tests
-  poetry run flake8 src tests
-  poetry run pytest tests/
-  ```
-- The bot runs via `bin/run.sh` which auto-restarts on exit. To deploy changes: `kill $(cat data/bot.pid)` and the wrapper brings it back up in 3 seconds.
-- **Restarting the bot as the Slack agent**: The sandbox blocks `kill`, so instead use:
-  ```bash
-  touch data/restart_requested
-  ```
-  The bot watches for this file and will restart itself automatically.
-
-## Code Style
-
-- Black (88 char line length), isort (black profile), flake8, mypy strict, autoflake for unused imports
-- pytest-asyncio with `asyncio_mode = "auto"`
-- structlog for all logging (JSON in prod, console in dev)
-- Type hints required on all functions (`disallow_untyped_defs = true`)
-- Use `datetime.now(UTC)` not `datetime.utcnow()` (deprecated)
-- Message formatting: Slack mrkdwn (`*bold*`, `_italic_`, `` `code` ``, ` ```block``` `)
-- UI elements: Block Kit dicts (not Telegram InlineKeyboardMarkup — this is a Slack bot)
-
-## Adding a New Bot Command
-
-### Agentic mode
-
-Agentic mode commands: `/start`, `/new`, `/status`, `/verbose`, `/repo`. If `ENABLE_PROJECT_CHANNELS=true`: `/sync_channels`. To add a new command:
-
-1. Add handler function in `src/bot/orchestrator.py`
-2. Register in `MessageOrchestrator._register_agentic_handlers()` using `app.command("/name")`
-3. Register the slash command in the Slack App manifest
-4. Add audit logging for the command
-
-### Classic mode
-
-1. Add handler function in `src/bot/handlers/command.py`
-2. Register in `MessageOrchestrator._register_classic_handlers()` using `app.command("/name")`
-3. Register the slash command in the Slack App manifest
-4. Add audit logging for the command
+Black (88 chars), isort (black profile), flake8, mypy strict. Type hints on all functions.
+Google-style docstrings on public functions. structlog for all logging.

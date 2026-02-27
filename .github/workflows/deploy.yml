@@ -1,0 +1,72 @@
+name: Deploy Scout
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -euo pipefail
+
+            cd ${{ secrets.APP_DIR || '/opt/scout' }}
+
+            echo "── Pulling latest code ───────────────────────────────"
+            git pull origin main
+
+            echo "── Backing up database ──────────────────────────────"
+            if [ -f data/bot.db ]; then
+              cp data/bot.db "data/bot.db.bak.$(date +%Y%m%d_%H%M%S)"
+              echo "Database backed up."
+            else
+              echo "No database to back up (first deploy?)."
+            fi
+
+            echo "── Building and restarting Scout ────────────────────"
+            docker-compose up -d --build
+
+            echo "── Waiting for container to start ───────────────────"
+            sleep 8
+
+            echo "── Health check ─────────────────────────────────────"
+            docker-compose exec -T scout python3 scripts/health_check.py --quick
+
+            echo "── Deploy complete ──────────────────────────────────"
+
+      - name: Notify Slack on success
+        if: success()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": ":white_check_mark: *Scout deployed successfully* to production.\nCommit: `${{ github.sha }}` by ${{ github.actor }}\n<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|View commit>"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEPLOY_WEBHOOK }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": ":x: *Scout deploy FAILED*.\nCommit: `${{ github.sha }}` by ${{ github.actor }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow>"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEPLOY_WEBHOOK }}
