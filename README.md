@@ -7,6 +7,12 @@
 
 A Python Slack bot that gives you remote access to [Claude Code](https://claude.ai/code). It combines agentic code assistance with session persistence, secure project boundaries, scheduled work, and event-driven notifications.
 
+**Relevant roles:** AI Engineer · Backend / Platform Engineer · Security-minded Automation Engineer
+
+**Status:** Alpha. You provide your own Slack app and Claude credentials; this repository does not provide a hosted service.
+
+Keep Slack tokens, Claude keys, webhook secrets, project paths, and user IDs in .env or another local secret manager. Do not paste real values into README examples or commit local configuration.
+
 ## Engineering highlights
 
 This repository is a practical example of:
@@ -16,8 +22,6 @@ This repository is a practical example of:
 - **Automation:** scheduled prompts, GitHub webhooks, CI/CD notifications, and file exchange
 - **Operational controls:** rate limiting, cost limits, SQLite migrations, structured logs, and configurable timeouts
 - **Extensibility:** MCP server support, Slack Socket Mode, agentic and classic interaction modes, and testable service boundaries
-
-**Status:** Alpha. You provide your own Slack app and Claude credentials; this repository does not provide a hosted service.
 
 ## Read this repository quickly
 
@@ -71,7 +75,7 @@ This bot connects Slack to Claude Code, providing a conversational AI interface 
 ### 3. Install
 
 ```bash
-git clone https://github.com/iveaves/claude-code-slack.git
+git clone https://github.com/oduonye1992/claude-code-slack.git
 cd claude-code-slack
 make dev
 ```
