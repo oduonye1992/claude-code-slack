@@ -5,7 +5,27 @@
 
 > Originally derived from [claude-code-telegram](https://github.com/RichardAtCT/claude-code-telegram) by [RichardAtCT](https://github.com/RichardAtCT). Refactored for Slack.
 
-A Slack bot that gives you remote access to [Claude Code](https://claude.ai/code). Chat naturally with Claude about your projects from anywhere -- no terminal commands needed.
+A Python Slack bot that gives you remote access to [Claude Code](https://claude.ai/code). It combines agentic code assistance with session persistence, secure project boundaries, scheduled work, and event-driven notifications.
+
+## Engineering highlights
+
+This repository is a practical example of:
+
+- **Agent session lifecycle:** persistent conversations, project routing, and SDK/CLI fallback
+- **Security boundaries:** allowlisted users, directory sandboxing, path-traversal protection, webhook authentication, and audit logging
+- **Automation:** scheduled prompts, GitHub webhooks, CI/CD notifications, and file exchange
+- **Operational controls:** rate limiting, cost limits, SQLite migrations, structured logs, and configurable timeouts
+- **Extensibility:** MCP server support, Slack Socket Mode, agentic and classic interaction modes, and testable service boundaries
+
+**Status:** Alpha. You provide your own Slack app and Claude credentials; this repository does not provide a hosted service.
+
+## Read this repository quickly
+
+1. Start with the setup below.
+2. Review [SECURITY.md](SECURITY.md) before running it with real projects.
+3. Run `make test` and `make lint`.
+4. Explore `src/` for the application and `tests/` for the verification boundary.
+
 
 ## What is this?
 
